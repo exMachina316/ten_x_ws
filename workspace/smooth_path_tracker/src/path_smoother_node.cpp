@@ -57,8 +57,10 @@ private:
     smooth_path.header.frame_id = "odom";
     smooth_path.header.stamp = this->now();
 
-    std::vector<TimedPose> timed_poses = processor_.generate_timed_path(
-        waypoints, points_per_meter_, desired_velocity_);
+    std::vector<Point> smooth_points =
+        processor_.generate_smooth_path(waypoints, points_per_meter_);
+    std::vector<TimedPose> timed_poses =
+        processor_.generate_timed_path(smooth_points, desired_velocity_);
 
     if (timed_poses.empty()) {
       RCLCPP_WARN(this->get_logger(), "Generated path is empty.");

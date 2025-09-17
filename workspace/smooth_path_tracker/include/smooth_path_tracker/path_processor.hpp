@@ -27,21 +27,18 @@ struct TimedPose {
 class PathProcessor {
 public:
   /**
-   * @brief Generates a timed, smooth path from a given set of waypoints.
+   * @brief Generates a timed path from a given set of smooth points.
    *
-   * @param waypoints A vector of Point structures representing the coarse
-   * waypoints.
-   * @param points_per_meter The desired number of points per meter of path
-   * length.
+   * @param smooth_points A vector of Point structures representing the smooth path.
    * @param desired_velocity The desired velocity for the path.
    * @return std::vector<TimedPose> A vector of TimedPose structures
    * representing the timed path.
    */
   std::vector<TimedPose>
-  generate_timed_path(const std::vector<Point> &waypoints,
-                      double points_per_meter, double desired_velocity);
+  generate_timed_path(const std::vector<Point> &smooth_points,
+                      double desired_velocity);
 
-private:
+public:
   /**
    * @brief Generates a smooth path from a given set of waypoints.
    *

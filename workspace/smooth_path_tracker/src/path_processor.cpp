@@ -1,11 +1,7 @@
 #include "smooth_path_tracker/path_processor.hpp"
 
-std::vector<TimedPose>
-PathProcessor::generate_timed_path(const std::vector<Point> &waypoints,
-                                   double points_per_meter,
-                                   double desired_velocity) {
-  std::vector<Point> smooth_points =
-      generate_smooth_path(waypoints, points_per_meter);
+std::vector<TimedPose> PathProcessor::generate_timed_path(
+    const std::vector<Point> &smooth_points, double desired_velocity) {
   std::vector<TimedPose> timed_poses;
 
   if (smooth_points.empty()) {
