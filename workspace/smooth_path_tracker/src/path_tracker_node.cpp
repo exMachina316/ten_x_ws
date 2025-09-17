@@ -3,6 +3,7 @@
 #include <nav_msgs/msg/odometry.hpp>
 #include <geometry_msgs/msg/twist_stamped.hpp>
 #include <geometry_msgs/msg/point_stamped.hpp>
+#include <visualization_msgs/msg/marker.hpp>
 #include <tf2/LinearMath/Quaternion.h>
 #include <tf2/LinearMath/Matrix3x3.h>
 #include <cmath>
@@ -28,11 +29,13 @@ public:
         this->declare_parameter<double>("linear_velocity", 0.2); // m/s
         this->declare_parameter<double>("goal_tolerance", 0.01); // meters
         this->declare_parameter<double>("yaw_error_threshold", 0.5); // radians
+        this->declare_parameter<double>("prediction_horizon", 1.0); // seconds
 
         this->get_parameter("lookahead_distance", lookahead_distance_);
         this->get_parameter("linear_velocity", linear_velocity_);
         this->get_parameter("goal_tolerance", goal_tolerance_);
         this->get_parameter("yaw_error_threshold", yaw_error_threshold_);
+        this->get_parameter("prediction_horizon", prediction_horizon_);
 
         rclcpp::QoS qos_profile(rclcpp::KeepLast(1));
         qos_profile.transient_local();
@@ -45,6 +48,8 @@ public:
 
         cmd_vel_publisher_ = this->create_publisher<geometry_msgs::msg::TwistStamped>("/cmd_vel", 10);
         lookahead_point_publisher_ = this->create_publisher<geometry_msgs::msg::PointStamped>("/lookahead_point", 10);
+        local_plan_publisher_ = this->create_publisher<nav_msgs::msg::Path>("/local_plan", 10);
+        state_marker_publisher_ = this->create_publisher<visualization_msgs::msg::Marker>("/tracking_state_marker", 10);
     }
 
     void path_callback(const nav_msgs::msg::Path::SharedPtr msg) {
@@ -161,6 +166,10 @@ public:
         twist_msg->twist.linear.x = current_linear_velocity;
         twist_msg->twist.angular.z = current_linear_velocity * curvature;
         
+        // Publish local plan for visualization
+        publish_local_plan(robot_x, robot_y, yaw, twist_msg->twist.linear.x, twist_msg->twist.angular.z, msg->header.frame_id);
+        publish_state_marker(tracking_state_);
+
         cmd_vel_publisher_->publish(std::move(twist_msg));
     }
 
@@ -190,11 +199,80 @@ public:
         RCLCPP_INFO(this->get_logger(), "Robot stopped.");
     }
 
+    void publish_local_plan(double robot_x, double robot_y, double robot_yaw, double linear_vel, double angular_vel, const std::string& frame_id) {
+        nav_msgs::msg::Path local_plan;
+        local_plan.header.stamp = this->get_clock()->now();
+        local_plan.header.frame_id = frame_id;
+
+        double dt = 0.1; // time step
+        int num_points = static_cast<int>(prediction_horizon_ / dt);
+
+        double current_x = robot_x;
+        double current_y = robot_y;
+        double current_yaw = robot_yaw;
+
+        for (int i = 0; i < num_points; ++i) {
+            current_x += linear_vel * cos(current_yaw) * dt;
+            current_y += linear_vel * sin(current_yaw) * dt;
+            current_yaw += angular_vel * dt;
+
+            geometry_msgs::msg::PoseStamped pose;
+            pose.header.stamp = rclcpp::Time(local_plan.header.stamp) + rclcpp::Duration::from_seconds(i * dt);
+            pose.header.frame_id = frame_id;
+            pose.pose.position.x = current_x;
+            pose.pose.position.y = current_y;
+            
+            tf2::Quaternion q;
+            q.setRPY(0, 0, current_yaw);
+            pose.pose.orientation.x = q.x();
+            pose.pose.orientation.y = q.y();
+            pose.pose.orientation.z = q.z();
+            pose.pose.orientation.w = q.w();
+
+            local_plan.poses.push_back(pose);
+        }
+        local_plan_publisher_->publish(local_plan);
+    }
+
+    void publish_state_marker(TrackingState state) {
+        auto marker_msg = std::make_unique<visualization_msgs::msg::Marker>();
+        marker_msg->header.stamp = this->get_clock()->now();
+        marker_msg->header.frame_id = "base_footprint";
+        marker_msg->ns = "tracking_state";
+        marker_msg->id = 0;
+        marker_msg->type = visualization_msgs::msg::Marker::TEXT_VIEW_FACING;
+        marker_msg->action = visualization_msgs::msg::Marker::ADD;
+        marker_msg->pose.position.x = 0.0; // Position in front of the robot
+        marker_msg->pose.position.y = 0.0;
+        marker_msg->pose.position.z = 0.5; // Position above the base
+        marker_msg->pose.orientation.w = 1.0;
+        marker_msg->scale.z = 0.2; // Text height
+        marker_msg->color.a = 1.0;
+        marker_msg->color.r = 0.0;
+        marker_msg->color.g = 1.0;
+        marker_msg->color.b = 0.0;
+        marker_msg->text = trackingStateToString(state);
+        marker_msg->lifetime = rclcpp::Duration::from_seconds(1.0);
+
+        state_marker_publisher_->publish(std::move(marker_msg));
+    }
+
+    std::string trackingStateToString(TrackingState state) {
+        switch (state) {
+            case TrackingState::IDLE: return "IDLE";
+            case TrackingState::APPROACHING: return "APPROACHING";
+            case TrackingState::TRACKING: return "TRACKING";
+            default: return "UNKNOWN";
+        }
+    }
+
     private:
     rclcpp::Subscription<nav_msgs::msg::Path>::SharedPtr path_subscription_;
     rclcpp::Subscription<nav_msgs::msg::Odometry>::SharedPtr odom_subscription_;
     rclcpp::Publisher<geometry_msgs::msg::TwistStamped>::SharedPtr cmd_vel_publisher_;
     rclcpp::Publisher<geometry_msgs::msg::PointStamped>::SharedPtr lookahead_point_publisher_;
+    rclcpp::Publisher<nav_msgs::msg::Path>::SharedPtr local_plan_publisher_;
+    rclcpp::Publisher<visualization_msgs::msg::Marker>::SharedPtr state_marker_publisher_;
     
     nav_msgs::msg::Path current_path_;
     size_t target_idx_ = 0;
@@ -202,6 +280,7 @@ public:
     double linear_velocity_;
     double goal_tolerance_;
     double yaw_error_threshold_;
+    double prediction_horizon_;
     TrackingState tracking_state_ = TrackingState::IDLE;
 };
 

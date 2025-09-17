@@ -1,16 +1,24 @@
+#include <vector>
+#include <cmath>
+
+#include "smooth_path_tracker/path_processor.hpp"
+
 #include <rclcpp/rclcpp.hpp>
+
 #include <nav_msgs/msg/path.hpp>
 #include <geometry_msgs/msg/pose_stamped.hpp>
 #include <geometry_msgs/msg/pose_array.hpp>
 #include <visualization_msgs/msg/marker_array.hpp>
-#include <vector>
-#include <cmath>
-#include "smooth_path_tracker/path_processor.hpp"
 
 class PathSmootherNode : public rclcpp::Node {
 public:
     PathSmootherNode() : Node("path_smoother_node") {
         RCLCPP_INFO(this->get_logger(), "Path Smoother node has been started.");
+
+        this->declare_parameter<double>("desired_velocity", 0.7314);
+        this->declare_parameter<double>("points_per_meter", 10.0);
+        this->get_parameter("desired_velocity", desired_velocity_);
+        this->get_parameter("points_per_meter", points_per_meter_);
 
         rclcpp::QoS qos_profile(rclcpp::KeepLast(1));
         qos_profile.transient_local();
@@ -29,7 +37,37 @@ private:
         std::vector<Point> waypoints = {
             {0.0, 0.0}, {2.0, 1.0}, {4.0, -1.0}, {6.0, 0.0}, {8.0, 2.0}
         };
+        visualize_waypoints(waypoints);
 
+        // Generate smoothed time parameterized path
+        nav_msgs::msg::Path smooth_path;
+        smooth_path.header.frame_id = "odom";
+        smooth_path.header.stamp = this->now();
+
+        std::vector<TimedPose> timed_poses = processor_.generate_timed_path(waypoints, points_per_meter_, desired_velocity_);
+
+        if (timed_poses.empty()) {
+            RCLCPP_WARN(this->get_logger(), "Generated path is empty.");
+        } else {
+            for (const auto& timed_pose : timed_poses) {
+                geometry_msgs::msg::PoseStamped pose;
+                pose.header.stamp = rclcpp::Time(0) + rclcpp::Duration::from_seconds(timed_pose.time_offset_secs);
+                pose.header.frame_id = "odom";
+                pose.pose.position.x = timed_pose.x;
+                pose.pose.position.y = timed_pose.y;
+                pose.pose.position.z = 0.0;
+                pose.pose.orientation = to_quaternion(0, 0, timed_pose.yaw);
+                smooth_path.poses.push_back(pose);
+            }
+            path_publisher_->publish(smooth_path);
+            RCLCPP_INFO(this->get_logger(), "Published smooth path with %zu poses.", smooth_path.poses.size());
+        }
+
+        // Stop the timer after publishing once
+        timer_->cancel();
+    }
+
+    void visualize_waypoints(std::vector<Point> waypoints) {
         // Publish waypoint markers
         visualization_msgs::msg::MarkerArray marker_array;
         for (size_t i = 0; i < waypoints.size(); ++i) {
@@ -77,35 +115,6 @@ private:
             marker_array.markers.push_back(text_marker);
         }
         marker_publisher_->publish(marker_array);
-
-        PathProcessor processor;
-        const double desired_velocity = 0.7314; // m/s
-        const double points_per_meter = 10.0;
-        std::vector<TimedPose> timed_poses = processor.generate_timed_path(waypoints, points_per_meter, desired_velocity);
-
-        nav_msgs::msg::Path smooth_path;
-        smooth_path.header.frame_id = "odom";
-        smooth_path.header.stamp = this->now();
-
-        if (timed_poses.empty()) {
-            RCLCPP_WARN(this->get_logger(), "Generated path is empty.");
-        } else {
-            for (const auto& timed_pose : timed_poses) {
-                geometry_msgs::msg::PoseStamped pose;
-                pose.header.stamp = rclcpp::Time(0) + rclcpp::Duration::from_seconds(timed_pose.time_offset_secs);
-                pose.header.frame_id = "odom";
-                pose.pose.position.x = timed_pose.x;
-                pose.pose.position.y = timed_pose.y;
-                pose.pose.position.z = 0.0;
-                pose.pose.orientation = to_quaternion(0, 0, timed_pose.yaw);
-                smooth_path.poses.push_back(pose);
-            }
-            path_publisher_->publish(smooth_path);
-            RCLCPP_INFO(this->get_logger(), "Published smooth path with %zu poses.", smooth_path.poses.size());
-        }
-
-        // Stop the timer after publishing once to avoid spamming the topic.
-        timer_->cancel();
     }
 
     geometry_msgs::msg::Quaternion to_quaternion(double roll, double pitch, double yaw) {
@@ -128,6 +137,9 @@ private:
     rclcpp::Publisher<nav_msgs::msg::Path>::SharedPtr path_publisher_;
     rclcpp::Publisher<visualization_msgs::msg::MarkerArray>::SharedPtr marker_publisher_;
     rclcpp::TimerBase::SharedPtr timer_;
+    PathProcessor processor_;
+    double desired_velocity_;
+    double points_per_meter_;
 };
 
 int main(int argc, char** argv) {

@@ -32,6 +32,7 @@ ament_target_dependencies(path_tracker_node
   nav_msgs
   geometry_msgs
   tf2_ros
+  visualization_msgs
 )
 
 install(TARGETS
@@ -46,9 +47,9 @@ install(
   DESTINATION include
 )
 
-# Install launch files
+# Install launch and config files
 install(DIRECTORY
-  launch
+  launch config
   DESTINATION share/${PROJECT_NAME}
 )
 

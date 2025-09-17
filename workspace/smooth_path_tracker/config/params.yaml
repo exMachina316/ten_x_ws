@@ -1,0 +1,12 @@
+path_smoother_node:
+  ros__parameters:
+    desired_velocity: 1.0
+    points_per_meter: 10.0
+
+path_tracker_node:
+  ros__parameters:
+    lookahead_distance: 0.5
+    linear_velocity: 0.5
+    goal_tolerance: 0.01
+    yaw_error_threshold: 0.5
+    prediction_horizon: 1.0
