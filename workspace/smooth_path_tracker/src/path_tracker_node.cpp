@@ -57,6 +57,9 @@ public:
     state_marker_publisher_ =
         this->create_publisher<visualization_msgs::msg::Marker>(
             "/tracking_state_marker", 10);
+
+    timer_ = this->create_wall_timer(
+        50ms, std::bind(&PathTrackerNode::control_loop, this));
   }
 
   void path_callback(const nav_msgs::msg::Path::SharedPtr msg) {
@@ -74,18 +77,24 @@ public:
   }
 
   void odom_callback(const nav_msgs::msg::Odometry::SharedPtr msg) {
-    if (tracking_state_ == TrackingState::IDLE || current_path_.poses.empty()) {
+    last_odom_ = msg;
+  }
+
+  void control_loop() {
+    if (tracking_state_ == TrackingState::IDLE || current_path_.poses.empty() ||
+        !last_odom_) {
       return; // No path to follow
     }
 
     // Current robot pose
-    double robot_x = msg->pose.pose.position.x;
-    double robot_y = msg->pose.pose.position.y;
+    double robot_x = last_odom_->pose.pose.position.x;
+    double robot_y = last_odom_->pose.pose.position.y;
 
     // Get yaw from quaternion
-    tf2::Quaternion q(
-        msg->pose.pose.orientation.x, msg->pose.pose.orientation.y,
-        msg->pose.pose.orientation.z, msg->pose.pose.orientation.w);
+    tf2::Quaternion q(last_odom_->pose.pose.orientation.x,
+                      last_odom_->pose.pose.orientation.y,
+                      last_odom_->pose.pose.orientation.z,
+                      last_odom_->pose.pose.orientation.w);
     tf2::Matrix3x3 m(q);
     double roll, pitch, yaw;
     m.getRPY(roll, pitch, yaw);
@@ -107,13 +116,14 @@ public:
 
     if (tracking_state_ == TrackingState::TRACKING) {
       // Find the look-ahead point on the path
-      find_lookahead_point(robot_x, robot_y);
+      target_idx_ = find_lookahead_point(robot_x, robot_y);
     }
 
     // Publish lookahead point for visualization
     auto lookahead_msg = std::make_unique<geometry_msgs::msg::PointStamped>();
     lookahead_msg->header.stamp = this->get_clock()->now();
-    lookahead_msg->header.frame_id = msg->header.frame_id; // Use the odom frame
+    lookahead_msg->header.frame_id =
+        last_odom_->header.frame_id; // Use the odom frame
     lookahead_msg->point = current_path_.poses[target_idx_].pose.position;
     lookahead_point_publisher_->publish(std::move(lookahead_msg));
 
@@ -132,60 +142,28 @@ public:
       return;
     }
 
-    // Calculate steering angle for Pure Pursuit
-    double target_x = current_path_.poses[target_idx_].pose.position.x;
-    double target_y = current_path_.poses[target_idx_].pose.position.y;
-
-    double alpha = atan2(target_y - robot_y, target_x - robot_x) - yaw;
-    // Normalize alpha to [-PI, PI]
-    alpha = atan2(sin(alpha), cos(alpha));
-
-    // Rotate in place if yaw error is too large
-    if (std::abs(alpha) > yaw_error_threshold_) {
-      auto twist_msg = std::make_unique<geometry_msgs::msg::TwistStamped>();
-      twist_msg->header.stamp = this->get_clock()->now();
-      twist_msg->twist.linear.x = 0.0;
-      twist_msg->twist.angular.z =
-          std::copysign(linear_velocity_, alpha); // Rotate with a fixed speed
-      cmd_vel_publisher_->publish(std::move(twist_msg));
-      return;
-    }
-
-    double curvature = 2.0 * sin(alpha) / lookahead_distance_;
-
-    double current_linear_velocity = linear_velocity_;
-    if (tracking_state_ == TrackingState::TRACKING &&
-        current_path_.poses.size() > 1 && target_idx_ > 0) {
-      rclcpp::Time t1(current_path_.poses[target_idx_ - 1].header.stamp);
-      rclcpp::Time t2(current_path_.poses[target_idx_].header.stamp);
-      double dt = (t2 - t1).seconds();
-
-      if (dt > 1e-6) { // Avoid division by zero
-        double p1_x = current_path_.poses[target_idx_ - 1].pose.position.x;
-        double p1_y = current_path_.poses[target_idx_ - 1].pose.position.y;
-        double p2_x = current_path_.poses[target_idx_].pose.position.x;
-        double p2_y = current_path_.poses[target_idx_].pose.position.y;
-        double dist = std::sqrt(pow(p2_x - p1_x, 2) + pow(p2_y - p1_y, 2));
-        current_linear_velocity = dist / dt;
-      }
-    }
+    // Calculate control commands
+    double linear_velocity = 0.0;
+    double angular_velocity = 0.0;
+    calculate_control_commands(current_path_.poses[target_idx_].pose.position,
+                               yaw, linear_velocity, angular_velocity);
 
     // Create and publish velocity command
     auto twist_msg = std::make_unique<geometry_msgs::msg::TwistStamped>();
     twist_msg->header.stamp = this->get_clock()->now();
     twist_msg->header.frame_id = "base_footprint";
-    twist_msg->twist.linear.x = current_linear_velocity;
-    twist_msg->twist.angular.z = current_linear_velocity * curvature;
+    twist_msg->twist.linear.x = linear_velocity;
+    twist_msg->twist.angular.z = angular_velocity;
 
     // Publish local plan for visualization
     publish_local_plan(robot_x, robot_y, yaw, twist_msg->twist.linear.x,
-                       twist_msg->twist.angular.z, msg->header.frame_id);
+                       twist_msg->twist.angular.z, last_odom_->header.frame_id);
     publish_state_marker(tracking_state_);
 
     cmd_vel_publisher_->publish(std::move(twist_msg));
   }
 
-  void find_lookahead_point(double robot_x, double robot_y) {
+  size_t find_lookahead_point(double robot_x, double robot_y) {
     // Start searching from the last target index to be efficient
     for (size_t i = target_idx_; i < current_path_.poses.size(); ++i) {
       double point_x = current_path_.poses[i].pose.position.x;
@@ -194,12 +172,11 @@ public:
           std::sqrt(pow(robot_x - point_x, 2) + pow(robot_y - point_y, 2));
 
       if (dist > lookahead_distance_) {
-        target_idx_ = i;
-        return;
+        return i;
       }
     }
     // If no point is far enough, take the last point
-    target_idx_ = current_path_.poses.size() - 1;
+    return current_path_.poses.size() - 1;
   }
 
   void stop_robot() {
@@ -286,6 +263,48 @@ public:
     }
   }
 
+  void
+  calculate_control_commands(const geometry_msgs::msg::Point &lookahead_point,
+                             double robot_yaw, double &linear_velocity,
+                             double &angular_velocity) {
+    double robot_x = last_odom_->pose.pose.position.x;
+    double robot_y = last_odom_->pose.pose.position.y;
+
+    double target_x = lookahead_point.x;
+    double target_y = lookahead_point.y;
+
+    double alpha = atan2(target_y - robot_y, target_x - robot_x) - robot_yaw;
+    alpha = atan2(sin(alpha), cos(alpha)); // Normalize alpha to [-PI, PI]
+
+    if (std::abs(alpha) > yaw_error_threshold_) {
+      linear_velocity = 0.0;
+      angular_velocity = std::copysign(linear_velocity_, alpha);
+      return;
+    }
+
+    double curvature = 2.0 * sin(alpha) / lookahead_distance_;
+
+    double current_linear_velocity = linear_velocity_;
+    if (tracking_state_ == TrackingState::TRACKING &&
+        current_path_.poses.size() > 1 && target_idx_ > 0) {
+      rclcpp::Time t1(current_path_.poses[target_idx_ - 1].header.stamp);
+      rclcpp::Time t2(current_path_.poses[target_idx_].header.stamp);
+      double dt = (t2 - t1).seconds();
+
+      if (dt > 1e-6) { // Avoid division by zero
+        double p1_x = current_path_.poses[target_idx_ - 1].pose.position.x;
+        double p1_y = current_path_.poses[target_idx_ - 1].pose.position.y;
+        double p2_x = current_path_.poses[target_idx_].pose.position.x;
+        double p2_y = current_path_.poses[target_idx_].pose.position.y;
+        double dist = std::sqrt(pow(p2_x - p1_x, 2) + pow(p2_y - p1_y, 2));
+        current_linear_velocity = dist / dt;
+      }
+    }
+
+    linear_velocity = current_linear_velocity;
+    angular_velocity = current_linear_velocity * curvature;
+  }
+
 private:
   rclcpp::Subscription<nav_msgs::msg::Path>::SharedPtr path_subscription_;
   rclcpp::Subscription<nav_msgs::msg::Odometry>::SharedPtr odom_subscription_;
@@ -296,8 +315,10 @@ private:
   rclcpp::Publisher<nav_msgs::msg::Path>::SharedPtr local_plan_publisher_;
   rclcpp::Publisher<visualization_msgs::msg::Marker>::SharedPtr
       state_marker_publisher_;
+  rclcpp::TimerBase::SharedPtr timer_;
 
   nav_msgs::msg::Path current_path_;
+  nav_msgs::msg::Odometry::SharedPtr last_odom_;
   size_t target_idx_ = 0;
   double lookahead_distance_;
   double linear_velocity_;

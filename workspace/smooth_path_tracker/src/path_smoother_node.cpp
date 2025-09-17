@@ -17,8 +17,11 @@ public:
 
     this->declare_parameter<double>("desired_velocity", 0.7314);
     this->declare_parameter<double>("points_per_meter", 10.0);
+    this->declare_parameter<std::vector<double>>(
+        "waypoints", {0.0, 0.0, 2.0, 1.0, 4.0, -1.0, 6.0, 0.0, 8.0, 2.0});
     this->get_parameter("desired_velocity", desired_velocity_);
     this->get_parameter("points_per_meter", points_per_meter_);
+    this->get_parameter("waypoints", waypoints_flat_);
 
     rclcpp::QoS qos_profile(rclcpp::KeepLast(1));
     qos_profile.transient_local();
@@ -37,8 +40,16 @@ public:
 private:
   void generate_and_publish_path() {
     // Define the coarse waypoints for the path
-    std::vector<Point> waypoints = {
-        {0.0, 0.0}, {2.0, 1.0}, {4.0, -1.0}, {6.0, 0.0}, {8.0, 2.0}};
+    std::vector<Point> waypoints;
+    if (waypoints_flat_.size() % 2 != 0) {
+      RCLCPP_ERROR(this->get_logger(),
+                   "Waypoints parameter has an odd number of values. Must be "
+                   "pairs of (x, y).");
+      return;
+    }
+    for (size_t i = 0; i < waypoints_flat_.size(); i += 2) {
+      waypoints.push_back({waypoints_flat_[i], waypoints_flat_[i + 1]});
+    }
     visualize_waypoints(waypoints);
 
     // Generate smoothed time parameterized path
@@ -141,12 +152,12 @@ private:
   }
 
   rclcpp::Publisher<nav_msgs::msg::Path>::SharedPtr path_publisher_;
-  rclcpp::Publisher<visualization_msgs::msg::MarkerArray>::SharedPtr
-      marker_publisher_;
+  rclcpp::Publisher<visualization_msgs::msg::MarkerArray>::SharedPtr marker_publisher_;
   rclcpp::TimerBase::SharedPtr timer_;
   PathProcessor processor_;
   double desired_velocity_;
   double points_per_meter_;
+  std::vector<double> waypoints_flat_;
 };
 
 int main(int argc, char **argv) {
