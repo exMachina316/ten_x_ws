@@ -5,7 +5,6 @@ Panels:
     Property Tree Widget:
       Expanded:
         - /Odometry1/Shape1
-        - /Path1
       Splitter Ratio: 0.5
     Tree Height: 718
   - Class: rviz_common/Selection
@@ -300,7 +299,7 @@ Visualization Manager:
       Value: true
     - Class: rviz_default_plugins/MarkerArray
       Enabled: true
-      Name: MarkerArray
+      Name: Waypoints
       Namespaces:
         waypoints_sphere: true
         waypoints_text: true
@@ -341,7 +340,7 @@ Visualization Manager:
       Value: true
     - Class: rviz_default_plugins/Marker
       Enabled: true
-      Name: Marker
+      Name: Tracking State
       Namespaces:
         tracking_state: true
       Topic:
@@ -398,25 +397,25 @@ Visualization Manager:
   Views:
     Current:
       Class: rviz_default_plugins/ThirdPersonFollower
-      Distance: 2.999309539794922
+      Distance: 9.270896911621094
       Enable Stereo Rendering:
         Stereo Eye Separation: 0.05999999865889549
         Stereo Focal Distance: 1
         Swap Stereo Eyes: false
         Value: false
       Focal Point:
-        X: -0.9498995542526245
-        Y: 0.08029139041900635
-        Z: 0
+        X: -1.2088227272033691
+        Y: -0.0953836441040039
+        Z: -0.00999809242784977
       Focal Shape Fixed Size: true
       Focal Shape Size: 0.05000000074505806
       Invert Z Axis: false
       Name: Current View
       Near Clip Distance: 0.009999999776482582
-      Pitch: 0.7160810828208923
+      Pitch: 0.7060811519622803
       Target Frame: base_link
       Value: ThirdPersonFollower (rviz_default_plugins)
-      Yaw: 3.260887861251831
+      Yaw: 3.192958354949951
     Saved: ~
 Window Geometry:
   Displays:
