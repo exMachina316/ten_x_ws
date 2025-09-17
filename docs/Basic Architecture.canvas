@@ -1,0 +1,20 @@
+{
+	"nodes":[
+		{"id":"19e33853d9e096d5","type":"text","text":"Path Smoother Server","x":-295,"y":-141,"width":250,"height":60},
+		{"id":"49742af21cafda9e","type":"text","text":"Orchestration Server","x":-295,"y":50,"width":250,"height":60},
+		{"id":"92202615ad66c19f","type":"text","text":"Controller Server","x":20,"y":180,"width":250,"height":60},
+		{"id":"8a29b53e2fa1e0af","type":"text","text":"Waypoints List","x":-635,"y":-141,"width":125,"height":60},
+		{"id":"a3af295a3c090174","type":"text","text":"Map Server","x":-295,"y":-290,"width":250,"height":60},
+		{"id":"37c6441e39463210","x":-635,"y":-290,"width":112,"height":60,"type":"text","text":"2D Lidar"}
+	],
+	"edges":[
+		{"id":"c096ef33345240e0","fromNode":"8a29b53e2fa1e0af","fromSide":"bottom","toNode":"49742af21cafda9e","toSide":"left"},
+		{"id":"3156d582049b47ac","fromNode":"49742af21cafda9e","fromSide":"top","toNode":"19e33853d9e096d5","toSide":"bottom"},
+		{"id":"4c6e31a502928fa4","fromNode":"19e33853d9e096d5","fromSide":"right","toNode":"49742af21cafda9e","toSide":"right"},
+		{"id":"2d3d58b0b79c4ba7","fromNode":"49742af21cafda9e","fromSide":"bottom","toNode":"92202615ad66c19f","toSide":"left"},
+		{"id":"22364abc3a2af5a3","fromNode":"a3af295a3c090174","fromSide":"bottom","toNode":"19e33853d9e096d5","toSide":"top","color":"2","label":"Map"},
+		{"id":"9d8a45507dd28fce","fromNode":"19e33853d9e096d5","fromSide":"right","toNode":"92202615ad66c19f","toSide":"top","color":"2","label":"Plan"},
+		{"id":"f35bd000e8703479","fromNode":"8a29b53e2fa1e0af","fromSide":"right","toNode":"19e33853d9e096d5","toSide":"left","color":"2","label":"Waypoints"},
+		{"id":"8d8b4c8942af2d98","fromNode":"37c6441e39463210","fromSide":"right","toNode":"a3af295a3c090174","toSide":"left","color":"2","label":"LaserScan"}
+	]
+}
