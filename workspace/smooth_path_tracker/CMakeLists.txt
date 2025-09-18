@@ -13,26 +13,46 @@ find_package(geometry_msgs REQUIRED)
 find_package(tf2_ros REQUIRED)
 find_package(visualization_msgs REQUIRED)
 
-# Add path smoother node
-add_executable(path_smoother_node src/path_smoother_node.cpp src/path_processor.cpp)
-ament_target_dependencies(path_smoother_node
-  rclcpp
-  nav_msgs
-  geometry_msgs
-  visualization_msgs
+include_directories(
+  include
 )
-target_include_directories(path_smoother_node PUBLIC
-  $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
-  $<INSTALL_INTERFACE:include>)
 
-# Add path tracker node
-add_executable(path_tracker_node src/path_tracker_node.cpp)
-ament_target_dependencies(path_tracker_node
+set(dependencies
   rclcpp
   nav_msgs
   geometry_msgs
   tf2_ros
   visualization_msgs
+)
+
+# Add path processor library
+add_library(path_processor_lib SHARED src/path_processor.cpp)
+ament_target_dependencies(path_processor_lib
+  ${dependencies}
+)
+
+# Add path smoother node
+add_executable(path_smoother_node src/path_smoother_node.cpp src/path_processor.cpp)
+ament_target_dependencies(path_smoother_node
+  ${dependencies}
+)
+
+# Add path tracker node
+add_executable(path_tracker_node src/path_tracker_node.cpp)
+add_library(path_tracker_node_lib SHARED src/path_tracker_node.cpp)
+ament_target_dependencies(path_tracker_node
+  ${dependencies}
+)
+ament_target_dependencies(path_tracker_node_lib
+  ${dependencies}
+)
+
+install(TARGETS
+  path_processor_lib
+  path_tracker_node_lib
+  ARCHIVE DESTINATION lib
+  LIBRARY DESTINATION lib
+  RUNTIME DESTINATION bin
 )
 
 install(TARGETS
@@ -52,5 +72,12 @@ install(DIRECTORY
   launch config
   DESTINATION share/${PROJECT_NAME}
 )
+
+if(BUILD_TESTING)
+  add_subdirectory(test)
+endif()
+
+ament_export_include_directories(include)
+ament_export_dependencies(${dependencies})
 
 ament_package()

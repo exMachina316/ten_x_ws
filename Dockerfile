@@ -45,7 +45,8 @@ RUN apt-get install --no-install-recommends -y \
 
 # Install util packages
 RUN apt-get install --no-install-recommends -y \
-    ros-$ROS_DISTRO-teleop-twist-keyboard
+    ros-$ROS_DISTRO-teleop-twist-keyboard \
+    ros-$ROS_DISTRO-plotjuggler-ros
 
 # Using shell to use bash commands like 'source'
 SHELL ["/bin/bash", "-c"]
@@ -77,3 +78,5 @@ RUN source /opt/ros/$ROS_DISTRO/setup.bash && cd $WORKSPACE && \
 # Update .bashrc
 RUN echo "source /opt/ros/$ROS_DISTRO/setup.bash" >> /root/.bashrc
 RUN echo "source $WORKSPACE/install/setup.bash" >> /root/.bashrc
+
+RUN echo "export TURTLEBOT3_MODEL=waffle_pi" >> /root/.bashrc

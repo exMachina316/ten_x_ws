@@ -1,6 +1,6 @@
 path_smoother_node:
   ros__parameters:
-    desired_velocity: 1.0
+    desired_velocity: 0.5
     points_per_meter: 10.0
     waypoints: [0.0, 0.0, 2.0, 1.0, 4.0, -1.0, 6.0, 0.0, 8.0, 2.0]
 
