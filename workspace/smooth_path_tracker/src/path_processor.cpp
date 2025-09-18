@@ -93,13 +93,13 @@ Point PathProcessor::cubic_bezier(Point p0, Point p1, Point p2, Point p3,
                                   double t) {
   Point p;
   double u = 1.0 - t;
-  double tt = t * t;
-  double uu = u * u;
-  double uuu = uu * u;
-  double ttt = tt * t;
+  double t2 = t * t;
+  double u2 = u * u;
+  double u3 = u2 * u;
+  double t3 = t2 * t;
 
-  p.x = uuu * p0.x + 3 * uu * t * p1.x + 3 * u * tt * p2.x + ttt * p3.x;
-  p.y = uuu * p0.y + 3 * uu * t * p1.y + 3 * u * tt * p2.y + ttt * p3.y;
+  p.x = u3 * p0.x + 3 * u2 * t * p1.x + 3 * u * t2 * p2.x + t3 * p3.x;
+  p.y = u3 * p0.y + 3 * u2 * t * p1.y + 3 * u * t2 * p2.y + t3 * p3.y;
 
   return p;
 }

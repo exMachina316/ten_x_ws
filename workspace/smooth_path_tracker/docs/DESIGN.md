@@ -11,13 +11,13 @@ The system is composed of two main ROS2 nodes that form a pipeline:
 
 These nodes are launched together using the `path_follower.launch.py` launch file, which also starts RViz for visualization. A non-ROS class, `PathProcessor`, encapsulates the core path smoothing and time-parameterization logic.
 
-- ![Basic Architecture Diagram](basic_architecture.png)
-
 ### Node Communication
 
 -   `path_smoother_node` -> `path_tracker_node`: The smoothed path is published on the `/smooth_path` topic as a `nav_msgs/msg/Path`. This is a transient local topic, so the last published path is latched for late-joining subscribers.
 -   `path_tracker_node` -> Robot: Velocity commands are published on the `/cmd_vel` topic as `geometry_msgs/msg/TwistStamped`.
 -   Robot -> `path_tracker_node`: The robot's odometry is received on the `/odom` topic as a `nav_msgs/msg/Odometry`.
+
+  ![Basic Architecture Diagram](basic_architecture.png)
 
 ## 2. Core Components and Algorithms
 
@@ -63,7 +63,7 @@ The node operates using a simple state machine to manage its behavior:
 
 #### Control Algorithm: Pure Pursuit
 
-The core of the `control_loop` is a pure pursuit-like algorithm.
+The core of the `control_loop` is a [pure pursuit-like algorithm](https://www.ri.cmu.edu/pub_files/pub3/coulter_r_craig_1992_1/coulter_r_craig_1992_1.pdf).
 
 1.  **Find Lookahead Point**: The `find_lookahead_point` function searches along the path to find a target point that is approximately `lookahead_distance` away from the robot's current position.
 2.  **Calculate Curvature**: The algorithm calculates the required steering angle to intercept the lookahead point. The angular velocity is proportional to the angle between the robot's current heading and the lookahead point.
