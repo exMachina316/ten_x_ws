@@ -81,3 +81,8 @@ A video demonstration of the `smooth_path_tracker` in action can be found [here]
 
 ## Development Note
 This project was developed with the assistance of Co-pilot with gemini 2.5 pro agent mode.
+
+## NOTICE
+For obstacle avoidance, I recommend implementing a controller such as the Dynamic Window Approach (DWA) or Model Predictive Controller(MPC) as these algorithms can avoid dynamic obstacles also. These planners can be integrated with the `smooth_path_tracker` to handle dynamic obstacles while following the smoothed path. For this, a discretization trasformation on the laser scan to a costmap will need to be implemented. The `smooth_path_tracker` focuses on generating a feasible path and tracking it, while the local planner can modify the velocity commands to avoid collisions in real-time.
+
+Due to time constraints I focused on more towards better testing, documentation and visualization for the path tracking package instead of a dynamic obstacle avoidance controller.
