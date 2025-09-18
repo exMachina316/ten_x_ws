@@ -13,13 +13,13 @@ To set up the development environment, follow these steps from the `scripts` dir
 
 2.  **Start the Development Container:**
     ```bash
-    ./devel.sh
+    ./create_container.sh
     ```
 
 3.  **Enter the Container:**
     For each new terminal, run the following command to get a shell inside the container:
     ```bash
-    ./enter_bash.sh
+    ./enter_container.sh
     ```
 
 The container already has the workspace built and sourced. You can start working on the code immediately.
