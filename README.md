@@ -68,11 +68,16 @@ For more details on the design and how to extend the functionality to a real rob
 - [Extending to a Real Robot](workspace/smooth_path_tracker/docs/EXTENDING_TO_REAL_ROBOT.md)
 
 ## Demonstration
-A demonstration of the `smooth_path_tracker` in action can be found in the following video:
+A video demonstration of the `smooth_path_tracker` in action can be found [here](workspace/smooth_path_tracker/docs/End-to-EndDemo.webm):
 
-<video src="workspace/smooth_path_tracker/docs/End-to-EndDemo.webm" width="640" height="480" controls autoplay loop>
-  Your browser does not support the video tag.
-</video>
+[End-to-EndDemo.webm](https://github.com/user-attachments/assets/05af07f1-6c18-41be-83d2-d2df38039721)
+
+### Rviz2 Visualization
+<img width="1948" height="1077" alt="image" src="https://github.com/user-attachments/assets/1437c8de-1538-4982-994e-6ff637e6a2e9" />
+
+### Plotjuggler Path Tracking Performance
+<img width="1920" height="1048" alt="image" src="https://github.com/user-attachments/assets/4eacf1c2-5bef-4fc8-9578-38c9d7dcb3a4" />
+
 
 ## Development Note
 This project was developed with the assistance of Co-pilot with gemini 2.5 pro agent mode.
