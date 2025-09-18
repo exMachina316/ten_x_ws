@@ -17,18 +17,19 @@ using namespace std::chrono_literals;
 
 class PathTrackerNode : public rclcpp::Node {
 public:
-  PathTrackerNode() : Node("path_tracker_node") {
+  PathTrackerNode() : Node("path_tracker_node")
+  {
     RCLCPP_INFO(this->get_logger(), "Path Tracker node has been started.");
 
     // Parameters for the controller
     this->declare_parameter<double>("lookahead_distance", 0.5);  // meters
-    this->declare_parameter<double>("linear_velocity", 0.2);     // m/s
-    this->declare_parameter<double>("goal_tolerance", 0.01);     // meters
+    this->declare_parameter<double>("max_linear_velocity", 0.2);     // m/s
+    this->declare_parameter<double>("goal_tolerance", 0.1);     // meters
     this->declare_parameter<double>("yaw_error_threshold", 0.5); // radians
     this->declare_parameter<double>("prediction_horizon", 1.0);  // seconds
 
     this->get_parameter("lookahead_distance", lookahead_distance_);
-    this->get_parameter("linear_velocity", linear_velocity_);
+    this->get_parameter("max_linear_velocity", max_linear_velocity_);
     this->get_parameter("goal_tolerance", goal_tolerance_);
     this->get_parameter("yaw_error_threshold", yaw_error_threshold_);
     this->get_parameter("prediction_horizon", prediction_horizon_);
@@ -36,35 +37,20 @@ public:
     rclcpp::QoS qos_profile(rclcpp::KeepLast(1));
     qos_profile.transient_local();
 
-    path_subscription_ = this->create_subscription<nav_msgs::msg::Path>(
-        "/smooth_path", qos_profile,
-        std::bind(&PathTrackerNode::path_callback, this,
-                  std::placeholders::_1));
+    path_subscription_ = this->create_subscription<nav_msgs::msg::Path>("smooth_path", qos_profile, std::bind(&PathTrackerNode::path_callback, this, std::placeholders::_1));
+    odom_subscription_ = this->create_subscription<nav_msgs::msg::Odometry>("/odom", 10, std::bind(&PathTrackerNode::odom_callback, this, std::placeholders::_1));
 
-    odom_subscription_ = this->create_subscription<nav_msgs::msg::Odometry>(
-        "/odom", 10,
-        std::bind(&PathTrackerNode::odom_callback, this,
-                  std::placeholders::_1));
+    cmd_vel_publisher_ = this->create_publisher<geometry_msgs::msg::TwistStamped>("/cmd_vel", 10);
+    lookahead_point_publisher_ = this->create_publisher<geometry_msgs::msg::PointStamped>("/lookahead_point", 10);
+    local_plan_publisher_ = this->create_publisher<nav_msgs::msg::Path>("/local_plan", 10);
+    state_marker_publisher_ = this->create_publisher<visualization_msgs::msg::Marker>("/tracking_state_marker", 10);
 
-    cmd_vel_publisher_ =
-        this->create_publisher<geometry_msgs::msg::TwistStamped>("/cmd_vel",
-                                                                 10);
-    lookahead_point_publisher_ =
-        this->create_publisher<geometry_msgs::msg::PointStamped>(
-            "/lookahead_point", 10);
-    local_plan_publisher_ =
-        this->create_publisher<nav_msgs::msg::Path>("/local_plan", 10);
-    state_marker_publisher_ =
-        this->create_publisher<visualization_msgs::msg::Marker>(
-            "/tracking_state_marker", 10);
-
-    timer_ = this->create_wall_timer(
-        50ms, std::bind(&PathTrackerNode::control_loop, this));
+    timer_ = this->create_wall_timer(50ms, std::bind(&PathTrackerNode::control_loop, this));
   }
 
-  void path_callback(const nav_msgs::msg::Path::SharedPtr msg) {
-    RCLCPP_INFO(this->get_logger(), "Received a new path with %zu poses.",
-                msg->poses.size());
+  void path_callback(const nav_msgs::msg::Path::SharedPtr msg)
+  {
+    RCLCPP_INFO(this->get_logger(), "Received a new path with %zu poses.", msg->poses.size());
     current_path_ = *msg;
     target_idx_ = 0;
     if (!current_path_.poses.empty()) {
@@ -76,13 +62,14 @@ public:
     }
   }
 
-  void odom_callback(const nav_msgs::msg::Odometry::SharedPtr msg) {
+  void odom_callback(const nav_msgs::msg::Odometry::SharedPtr msg)
+  {
     last_odom_ = msg;
   }
 
-  void control_loop() {
-    if (tracking_state_ == TrackingState::IDLE || current_path_.poses.empty() ||
-        !last_odom_) {
+  void control_loop()
+  {
+    if (tracking_state_ == TrackingState::IDLE || current_path_.poses.empty() || !last_odom_) {
       return; // No path to follow
     }
 
@@ -104,8 +91,7 @@ public:
       target_idx_ = 0;
       double first_wp_x = current_path_.poses[0].pose.position.x;
       double first_wp_y = current_path_.poses[0].pose.position.y;
-      double dist_to_first_wp = std::sqrt(pow(robot_x - first_wp_x, 2) +
-                                          pow(robot_y - first_wp_y, 2));
+      double dist_to_first_wp = std::sqrt(pow(robot_x - first_wp_x, 2) + pow(robot_y - first_wp_y, 2));
 
       if (dist_to_first_wp < lookahead_distance_) {
         tracking_state_ = TrackingState::TRACKING;
@@ -122,19 +108,16 @@ public:
     // Publish lookahead point for visualization
     auto lookahead_msg = std::make_unique<geometry_msgs::msg::PointStamped>();
     lookahead_msg->header.stamp = this->get_clock()->now();
-    lookahead_msg->header.frame_id =
-        last_odom_->header.frame_id; // Use the odom frame
+    lookahead_msg->header.frame_id = last_odom_->header.frame_id; // Use the odom frame
     lookahead_msg->point = current_path_.poses[target_idx_].pose.position;
     lookahead_point_publisher_->publish(std::move(lookahead_msg));
 
     // Check if the goal is reached
     double goal_x = current_path_.poses.back().pose.position.x;
     double goal_y = current_path_.poses.back().pose.position.y;
-    double dist_to_goal =
-        std::sqrt(pow(robot_x - goal_x, 2) + pow(robot_y - goal_y, 2));
+    double dist_to_goal = std::sqrt(pow(robot_x - goal_x, 2) + pow(robot_y - goal_y, 2));
 
-    if (dist_to_goal < goal_tolerance_ &&
-        target_idx_ >= current_path_.poses.size() - 1) {
+    if (dist_to_goal < goal_tolerance_ && target_idx_ >= current_path_.poses.size() - 1) {
       stop_robot();
       RCLCPP_INFO(this->get_logger(), "Goal reached!");
       current_path_.poses.clear(); // Clear path to stop processing
@@ -145,8 +128,7 @@ public:
     // Calculate control commands
     double linear_velocity = 0.0;
     double angular_velocity = 0.0;
-    calculate_control_commands(current_path_.poses[target_idx_].pose.position,
-                               yaw, linear_velocity, angular_velocity);
+    calculate_control_commands(current_path_.poses[target_idx_].pose.position, yaw, linear_velocity, angular_velocity);
 
     // Create and publish velocity command
     auto twist_msg = std::make_unique<geometry_msgs::msg::TwistStamped>();
@@ -156,20 +138,19 @@ public:
     twist_msg->twist.angular.z = angular_velocity;
 
     // Publish local plan for visualization
-    publish_local_plan(robot_x, robot_y, yaw, twist_msg->twist.linear.x,
-                       twist_msg->twist.angular.z, last_odom_->header.frame_id);
+    publish_local_plan(robot_x, robot_y, yaw, twist_msg->twist.linear.x, twist_msg->twist.angular.z, last_odom_->header.frame_id);
     publish_state_marker(tracking_state_);
 
     cmd_vel_publisher_->publish(std::move(twist_msg));
   }
 
-  size_t find_lookahead_point(double robot_x, double robot_y) {
+  size_t find_lookahead_point(double robot_x, double robot_y)
+  {
     // Start searching from the last target index to be efficient
     for (size_t i = target_idx_; i < current_path_.poses.size(); ++i) {
       double point_x = current_path_.poses[i].pose.position.x;
       double point_y = current_path_.poses[i].pose.position.y;
-      double dist =
-          std::sqrt(pow(robot_x - point_x, 2) + pow(robot_y - point_y, 2));
+      double dist = std::sqrt(pow(robot_x - point_x, 2) + pow(robot_y - point_y, 2));
 
       if (dist > lookahead_distance_) {
         return i;
@@ -179,7 +160,8 @@ public:
     return current_path_.poses.size() - 1;
   }
 
-  void stop_robot() {
+  void stop_robot()
+  {
     auto twist_msg = std::make_unique<geometry_msgs::msg::TwistStamped>();
     twist_msg->header.stamp = this->get_clock()->now();
     twist_msg->header.frame_id = "base_footprint";
@@ -189,9 +171,8 @@ public:
     RCLCPP_INFO(this->get_logger(), "Robot stopped.");
   }
 
-  void publish_local_plan(double robot_x, double robot_y, double robot_yaw,
-                          double linear_vel, double angular_vel,
-                          const std::string &frame_id) {
+  void publish_local_plan(double robot_x, double robot_y, double robot_yaw, double linear_vel, double angular_vel, const std::string &frame_id)
+  {
     nav_msgs::msg::Path local_plan;
     local_plan.header.stamp = this->get_clock()->now();
     local_plan.header.frame_id = frame_id;
@@ -209,8 +190,7 @@ public:
       current_yaw += angular_vel * dt;
 
       geometry_msgs::msg::PoseStamped pose;
-      pose.header.stamp = rclcpp::Time(local_plan.header.stamp) +
-                          rclcpp::Duration::from_seconds(i * dt);
+      pose.header.stamp = rclcpp::Time(local_plan.header.stamp) + rclcpp::Duration::from_seconds(i * dt);
       pose.header.frame_id = frame_id;
       pose.pose.position.x = current_x;
       pose.pose.position.y = current_y;
@@ -227,7 +207,8 @@ public:
     local_plan_publisher_->publish(local_plan);
   }
 
-  void publish_state_marker(TrackingState state) {
+  void publish_state_marker(TrackingState state)
+  {
     auto marker_msg = std::make_unique<visualization_msgs::msg::Marker>();
     marker_msg->header.stamp = this->get_clock()->now();
     marker_msg->header.frame_id = "base_footprint";
@@ -250,7 +231,8 @@ public:
     state_marker_publisher_->publish(std::move(marker_msg));
   }
 
-  std::string trackingStateToString(TrackingState state) {
+  std::string trackingStateToString(TrackingState state)
+  {
     switch (state) {
     case TrackingState::IDLE:
       return "IDLE";
@@ -263,10 +245,8 @@ public:
     }
   }
 
-  void
-  calculate_control_commands(const geometry_msgs::msg::Point &lookahead_point,
-                             double robot_yaw, double &linear_velocity,
-                             double &angular_velocity) {
+  void calculate_control_commands(const geometry_msgs::msg::Point &lookahead_point, double robot_yaw, double &linear_velocity, double &angular_velocity)
+  {
     double robot_x = last_odom_->pose.pose.position.x;
     double robot_y = last_odom_->pose.pose.position.y;
 
@@ -278,13 +258,13 @@ public:
 
     if (std::abs(alpha) > yaw_error_threshold_) {
       linear_velocity = 0.0;
-      angular_velocity = std::copysign(linear_velocity_, alpha);
+      angular_velocity = std::copysign(max_linear_velocity_, alpha);
       return;
     }
 
     double curvature = 2.0 * sin(alpha) / lookahead_distance_;
 
-    double current_linear_velocity = linear_velocity_;
+    double current_linear_velocity = max_linear_velocity_;
     if (tracking_state_ == TrackingState::TRACKING &&
         current_path_.poses.size() > 1 && target_idx_ > 0) {
       rclcpp::Time t1(current_path_.poses[target_idx_ - 1].header.stamp);
@@ -306,26 +286,24 @@ public:
   }
 
 private:
-  rclcpp::Subscription<nav_msgs::msg::Path>::SharedPtr path_subscription_;
-  rclcpp::Subscription<nav_msgs::msg::Odometry>::SharedPtr odom_subscription_;
-  rclcpp::Publisher<geometry_msgs::msg::TwistStamped>::SharedPtr
-      cmd_vel_publisher_;
-  rclcpp::Publisher<geometry_msgs::msg::PointStamped>::SharedPtr
-      lookahead_point_publisher_;
-  rclcpp::Publisher<nav_msgs::msg::Path>::SharedPtr local_plan_publisher_;
-  rclcpp::Publisher<visualization_msgs::msg::Marker>::SharedPtr
-      state_marker_publisher_;
-  rclcpp::TimerBase::SharedPtr timer_;
+  size_t target_idx_ = 0;
+  TrackingState tracking_state_ = TrackingState::IDLE;
 
   nav_msgs::msg::Path current_path_;
   nav_msgs::msg::Odometry::SharedPtr last_odom_;
-  size_t target_idx_ = 0;
   double lookahead_distance_;
-  double linear_velocity_;
+  double max_linear_velocity_;
   double goal_tolerance_;
   double yaw_error_threshold_;
   double prediction_horizon_;
-  TrackingState tracking_state_ = TrackingState::IDLE;
+
+  rclcpp::Subscription<nav_msgs::msg::Path>::SharedPtr path_subscription_;
+  rclcpp::Subscription<nav_msgs::msg::Odometry>::SharedPtr odom_subscription_;
+  rclcpp::Publisher<geometry_msgs::msg::TwistStamped>::SharedPtr cmd_vel_publisher_;
+  rclcpp::Publisher<geometry_msgs::msg::PointStamped>::SharedPtr lookahead_point_publisher_;
+  rclcpp::Publisher<nav_msgs::msg::Path>::SharedPtr local_plan_publisher_;
+  rclcpp::Publisher<visualization_msgs::msg::Marker>::SharedPtr state_marker_publisher_;
+  rclcpp::TimerBase::SharedPtr timer_;
 };
 
 int main(int argc, char **argv) {

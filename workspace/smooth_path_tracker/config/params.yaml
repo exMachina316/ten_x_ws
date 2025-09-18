@@ -7,7 +7,7 @@ path_smoother_node:
 path_tracker_node:
   ros__parameters:
     lookahead_distance: 0.5
-    linear_velocity: 0.5
+    max_linear_velocity: 1.0
     goal_tolerance: 0.1
     yaw_error_threshold: 0.5
     prediction_horizon: 1.0
