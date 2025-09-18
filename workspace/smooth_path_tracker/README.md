@@ -60,6 +60,28 @@ To see the test results, you can run:
 colcon test-result --verbose
 ```
 
+## Parameters
+
+### Path Tracker Node
+
+- `lookahead_distance` (double, default: 0.5)
+  - The lookahead distance for the pure pursuit controller in meters.
+- `max_linear_velocity` (double, default: 0.2)
+  - The maximum linear velocity of the robot in m/s.
+- `goal_tolerance` (double, default: 0.1)
+  - The tolerance for reaching the goal in meters.
+- `yaw_error_threshold` (double, default: 0.5)
+  - The yaw error threshold in radians.
+- `prediction_horizon` (double, default: 1.0)
+  - The prediction horizon for the controller in seconds.
+
+### Path Smoother Node
+
+- `desired_velocity` (double, default: 0.7314)
+  - The desired velocity for the path.
+- `points_per_meter` (double, default: 10.0)
+  - The number of points to generate per meter of the path.
+
 ## License
 
 This project is licensed under the Apache-2.0 License. See the [LICENSE](LICENSE) file for details.
