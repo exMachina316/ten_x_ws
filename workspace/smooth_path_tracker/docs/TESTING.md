@@ -1,16 +1,16 @@
-# Path Tracker Node Test Design
+\# Test Design
 
-This document outlines the test design for the `path_tracker_node`, a ROS2 component responsible for guiding a robot along a predefined smooth path. The testing strategy focuses on unit tests to ensure the correctness and robustness of the node's core functionalities.
+This document outlines the test design for the `smooth_path_tracker` package, including the `path_tracker_node` and `path_processor` components. The testing strategy focuses on unit tests to ensure the correctness and robustness of the core functionalities.
 
 ## 1. Test Strategy
 
-The primary testing approach is unit testing using the **Google Test (gtest)** framework. This allows for isolated testing of individual functions and behaviors within the `PathTrackerNode`. A mock `Controller` class, derived from `PathTrackerNode`, is used to facilitate testing by providing access to internal states and protected members.
+The primary testing approach is unit testing using the **Google Test (gtest)** framework. This allows for isolated testing of individual functions and behaviors. For ROS nodes like `PathTrackerNode`, a mock class derived from the node is used to facilitate testing by providing access to internal states and protected members.
 
 The tests are designed to cover the following key areas:
-- **State Machine Logic:** Ensuring correct transitions between `IDLE`, `APPROACHING`, and `TRACKING` states.
-- **Core Algorithms:** Validating the pure pursuit logic, including lookahead point calculation and control command generation.
-- **Parameter Handling:** Verifying that the node's behavior changes correctly based on its configuration parameters.
-- **Edge Cases:** Testing the node's response to non-nominal inputs, such as empty paths.
+- **State Machine Logic:** Ensuring correct transitions between states.
+- **Core Algorithms:** Validating the underlying logic, such as pure pursuit, path smoothing, and command generation.
+- **Parameter Handling:** Verifying that components' behavior changes correctly based on configuration.
+- **Edge Cases:** Testing the response to non-nominal inputs, such as empty paths or invalid data.
 - **Helper Functions:** Ensuring the correctness of utility functions.
 
 ## 2. Test Environment
@@ -19,9 +19,9 @@ The tests are designed to cover the following key areas:
 - **Testing Library:** `gtest`
 - **Dependencies:** `rclcpp`, `nav_msgs`, `geometry_msgs`, `visualization_msgs`
 
-## 3. Test Cases
+## 3. Path Tracker Node Tests
 
-The following test cases have been implemented to validate the functionality of the `path_tracker_node`.
+This section details the test cases for the `path_tracker_node`.
 
 ### 3.1. `FindLookaheadPointAPI`
 - **Objective:** To verify that the `find_lookahead_point` function correctly identifies the target point on the path based on the robot's position and the lookahead distance.
@@ -92,6 +92,55 @@ The following test cases have been implemented to validate the functionality of 
 | `yaw_error_threshold` | Yaw error is below threshold | `alpha < yaw_error_threshold` | `linear_velocity > 0` | `EXPECT_NE` |
 | `yaw_error_threshold` | Yaw error is above threshold | `alpha > yaw_error_threshold` | `linear_velocity = 0` (in-place rotation) | `EXPECT_EQ` |
 
+## 4. Path Processor Tests
 
-## 4. Coverage
-The test suite is designed to achieve high line coverage for `path_tracker_node.cpp`, ensuring that all critical logic paths are exercised.
+This section details the test cases for the `path_processor` library.
+
+### 4.1. `Distance`
+- **Objective:** To verify that the `distance` function correctly calculates the Euclidean distance between two points.
+
+| Test Scenario | Inputs | Expected Outcome | Assertion(s) |
+| :--- | :--- | :--- | :--- |
+| Standard case | `p1={0,0}`, `p2={3,4}` | Distance is 5.0 | `EXPECT_DOUBLE_EQ` |
+| Same point | `p1={0,0}`, `p2={0,0}` | Distance is 0.0 | `EXPECT_DOUBLE_EQ` |
+| Negative coordinates | `p1={0,0}`, `p2={-3,-4}` | Distance is 5.0 | `EXPECT_DOUBLE_EQ` |
+
+### 4.2. `CubicBezier`
+- **Objective:** To verify the `cubic_bezier` function correctly calculates a point on a cubic Bezier curve for a given parameter `t`.
+
+| Test Scenario | Inputs | Expected Outcome | Assertion(s) |
+| :--- | :--- | :--- | :--- |
+| Start of curve | `t=0.0` | Result is the start point `p0` | `EXPECT_DOUBLE_EQ` |
+| End of curve | `t=1.0` | Result is the end point `p3` | `EXPECT_DOUBLE_EQ` |
+| Midpoint of curve | `t=0.5` | Result is the calculated midpoint | `EXPECT_DOUBLE_EQ` |
+
+### 4.3. `CalculateControlPoints`
+- **Objective:** To ensure the `calculate_control_points` function correctly computes Bezier control points (`p1`, `p2`) for a given set of waypoints.
+
+| Test Scenario | Inputs | Expected Outcome | Assertion(s) |
+| :--- | :--- | :--- | :--- |
+| Standard case | 3 waypoints | Correct `p1` and `p2` vectors are generated | `ASSERT_EQ`, `EXPECT_NEAR` |
+| Edge case: 2 waypoints | 2 waypoints | Correct `p1` and `p2` vectors are generated | `ASSERT_EQ`, `EXPECT_NEAR` |
+| Edge case: Empty | 0 waypoints | `p1` and `p2` vectors are empty | `EXPECT_TRUE` |
+| Edge case: 1 waypoint | 1 waypoint | `p1` and `p2` vectors are empty | `EXPECT_TRUE` |
+
+### 4.4. `GenerateSmoothPath`
+- **Objective:** To validate that `generate_smooth_path` produces a plausible, dense path from a sparse set of waypoints.
+
+| Test Scenario | Inputs | Expected Outcome | Assertion(s) |
+| :--- | :--- | :--- | :--- |
+| Straight line | Waypoints for a straight line | Path size is as expected; start/end points match | `EXPECT_NEAR`, `EXPECT_DOUBLE_EQ` |
+| Edge case: Empty | 0 waypoints | The generated path is empty | `EXPECT_TRUE` |
+| Edge case: 1 waypoint | 1 waypoint | The generated path is empty | `EXPECT_TRUE` |
+
+### 4.5. `GenerateTimedPath`
+- **Objective:** To verify that `generate_timed_path` correctly assigns timestamps, yaws, and velocities to a given path.
+
+| Test Scenario | Inputs | Expected Outcome | Assertion(s) |
+| :--- | :--- | :--- | :--- |
+| Straight path | Path with equidistant points, `desired_velocity=0.5` | Timestamps increase linearly; yaw is constant; computed velocity matches desired velocity | `ASSERT_EQ`, `EXPECT_DOUBLE_EQ`, `EXPECT_NEAR` |
+| Edge case: Empty | Empty path | The generated timed path is empty | `EXPECT_TRUE` |
+| Edge case: 1 point | Path with one point | A single timed pose is generated with 0 time offset and 0 yaw | `ASSERT_EQ`, `EXPECT_DOUBLE_EQ` |
+
+## 5. Coverage
+The test suites are designed to achieve high line coverage for `path_tracker_node.cpp` and `path_processor.cpp`, ensuring that all critical logic paths are exercised.

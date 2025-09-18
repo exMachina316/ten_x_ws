@@ -25,6 +25,12 @@ set(dependencies
   visualization_msgs
 )
 
+# Add path processor library
+add_library(path_processor_lib SHARED src/path_processor.cpp)
+ament_target_dependencies(path_processor_lib
+  ${dependencies}
+)
+
 # Add path smoother node
 add_executable(path_smoother_node src/path_smoother_node.cpp src/path_processor.cpp)
 ament_target_dependencies(path_smoother_node
@@ -42,6 +48,7 @@ ament_target_dependencies(path_tracker_node_lib
 )
 
 install(TARGETS
+  path_processor_lib
   path_tracker_node_lib
   ARCHIVE DESTINATION lib
   LIBRARY DESTINATION lib
