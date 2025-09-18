@@ -11,6 +11,8 @@ The system is composed of two main ROS2 nodes that form a pipeline:
 
 These nodes are launched together using the `path_follower.launch.py` launch file, which also starts RViz for visualization. A non-ROS class, `PathProcessor`, encapsulates the core path smoothing and time-parameterization logic.
 
+- ![Basic Architecture Diagram](basic_architecture.png)
+
 ### Node Communication
 
 -   `path_smoother_node` -> `path_tracker_node`: The smoothed path is published on the `/smooth_path` topic as a `nav_msgs/msg/Path`. This is a transient local topic, so the last published path is latched for late-joining subscribers.
